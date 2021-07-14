@@ -1,7 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"github.com/derekahndev/sadfrogcoin/rest"
+)
 
 func main() {
-	fmt.Println("Welcome to Sadfrogcoin!")
+	rest.Start(4000)
 }

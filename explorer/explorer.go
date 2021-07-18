@@ -9,11 +9,11 @@ import (
 	"github.com/derekahndev/sadfrogcoin/blockchain"
 )
 
-var templates *template.Template
-
 const (
-	templateDir string = "templates/"
+	templateDir string = "explorer/templates/"
 )
+
+var templates *template.Template
 
 type homeData struct {
 	PageTitle string

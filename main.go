@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/derekahndev/sadfrogcoin/blockchain"
 	"github.com/derekahndev/sadfrogcoin/cli"
+	"github.com/derekahndev/sadfrogcoin/db"
 )
 
 func main() {
-	blockchain.Blockchain()
+	defer db.Close()
 	cli.Start()
 }

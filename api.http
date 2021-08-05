@@ -16,3 +16,10 @@ POST http://localhost:4000/transactions
 http://localhost:4000/mempool
 ###
 http://localhost:4000/balance/bbe3f94c327c9bcabc2d4ee32dcf040c59e125d9452d79edd694ae627cd68fe3b3f48c746c05951f0e675f82dbc111a4dec443ede7c5ed87a9dcd12f589f1666
+###
+POST http://localhost:4000/peers
+
+{
+    "address": "127.0.0.1",
+    "port": 3000
+}

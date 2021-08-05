@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/derekahndev/sadfrogcoin/blockchain"
+	"github.com/derekahndev/sadfrogcoin/p2p"
 	"github.com/derekahndev/sadfrogcoin/utils"
 	"github.com/derekahndev/sadfrogcoin/wallet"
 	"github.com/gorilla/mux"
@@ -46,6 +47,10 @@ type addTxPayload struct {
 	Amount int
 }
 
+type addPeerPayload struct {
+	Address, Port string
+}
+
 func documentation(rw http.ResponseWriter, r *http.Request) {
 	data := []urlDescription{
 		{
@@ -79,6 +84,11 @@ func documentation(rw http.ResponseWriter, r *http.Request) {
 			Method:      "GET",
 			Description: "Get TxOuts for an Address",
 		},
+		{
+			URL:         url("/ws"),
+			Method:      "GET",
+			Description: "Upgrade to WebSockets",
+		},
 	}
 	json.NewEncoder(rw).Encode(data)
 }
@@ -88,7 +98,8 @@ func blocks(rw http.ResponseWriter, r *http.Request) {
 	case "GET":
 		json.NewEncoder(rw).Encode(blockchain.Blocks(blockchain.Blockchain()))
 	case "POST":
-		blockchain.Blockchain().AddBlock()
+		newBlock := blockchain.Blockchain().AddBlock()
+		p2p.BroadcastNewBlock(newBlock)
 		rw.WriteHeader(http.StatusCreated)
 	}
 }
@@ -106,12 +117,19 @@ func block(rw http.ResponseWriter, r *http.Request) {
 }
 
 func status(rw http.ResponseWriter, r *http.Request) {
-	utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Blockchain()))
+	blockchain.Status(blockchain.Blockchain(), rw)
 }
 
 func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Add("Content-Type", "application/json")
+		next.ServeHTTP(rw, r)
+	})
+}
+
+func loggereMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		fmt.Println(r.URL)
 		next.ServeHTTP(rw, r)
 	})
 }
@@ -130,18 +148,19 @@ func balance(rw http.ResponseWriter, r *http.Request) {
 }
 
 func mempool(rw http.ResponseWriter, r *http.Request) {
-	utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Mempool.Txs))
+	utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Mempool().Txs))
 }
 
 func transactions(rw http.ResponseWriter, r *http.Request) {
 	var payload addTxPayload
 	utils.HandleErr(json.NewDecoder(r.Body).Decode(&payload))
-	err := blockchain.Mempool.AddTx(payload.To, payload.Amount)
+	tx, err := blockchain.Mempool().AddTx(payload.To, payload.Amount)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(rw).Encode(errorResponse{err.Error()})
 		return
 	}
+	p2p.BroadcastNewTx(tx)
 	rw.WriteHeader(http.StatusCreated)
 }
 
@@ -150,10 +169,22 @@ func myWallet(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(myWalletResponse{Address: address})
 }
 
+func peers(rw http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		var payload addPeerPayload
+		json.NewDecoder(r.Body).Decode(&payload)
+		p2p.AddPeer(payload.Address, payload.Port, port[1:], true)
+		rw.WriteHeader(http.StatusOK)
+	case "GET":
+		json.NewEncoder(rw).Encode(p2p.AllPeers(&p2p.Peers))
+	}
+}
+
 func Start(aPort int) {
 	port = fmt.Sprintf(":%d", aPort)
 	router := mux.NewRouter()
-	router.Use(jsonContentTypeMiddleware)
+	router.Use(jsonContentTypeMiddleware, loggereMiddleware)
 	router.HandleFunc("/", documentation).Methods("GET")
 	router.HandleFunc("/status", status).Methods("GET")
 	router.HandleFunc("/blocks", blocks).Methods("GET", "POST")
@@ -162,6 +193,7 @@ func Start(aPort int) {
 	router.HandleFunc("/mempool", mempool).Methods("GET")
 	router.HandleFunc("/wallet", myWallet).Methods("GET")
 	router.HandleFunc("/transactions", transactions).Methods("POST")
+	router.HandleFunc("/peers", peers).Methods("GET", "POST")
 	fmt.Printf("Listening on http://localhost%s\n", port)
 	log.Fatal(http.ListenAndServe(port, router))
 }

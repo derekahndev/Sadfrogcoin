@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/derekahndev/sadfrogcoin/db"
 	"github.com/derekahndev/sadfrogcoin/utils"
 )
 
@@ -16,11 +15,11 @@ type Block struct {
 	Difficulty   int    `json:"difficulty"`
 	Nonce        int    `json:"nonce"`
 	Timestamp    int    `json:"timestamp"`
-	Transactions []*Tx  `json:"transactions`
+	Transactions []*Tx  `json:"transactions"`
 }
 
-func (b *Block) persist() {
-	db.SaveBlock(b.Hash, utils.ToBytes(b))
+func persistBlock(b *Block) {
+	dbStorage.SaveBlock(b.Hash, utils.ToBytes(b))
 }
 
 var ErrNotFound = errors.New("block not found")
@@ -30,7 +29,7 @@ func (b *Block) restore(data []byte) {
 }
 
 func FindBlock(hash string) (*Block, error) {
-	blockBytes := db.Block(hash)
+	blockBytes := dbStorage.FindBlock(hash)
 	if blockBytes == nil {
 		return nil, ErrNotFound
 	}
@@ -61,8 +60,8 @@ func createBlock(prevHash string, height, diff int) *Block {
 		Difficulty: diff,
 		Nonce:      0,
 	}
+	block.Transactions = Mempool().TxToConfirm()
 	block.mine()
-	block.Transactions = Mempool.TxToConfirm()
-	block.persist()
+	persistBlock(block)
 	return block
 }
